@@ -7,6 +7,8 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+type SimpleQueueType = int
+
 const (
 	DurableQueue = iota
 	TransientQueue
@@ -34,7 +36,7 @@ func DeclareAndBind(
 	exchange,
 	queueName,
 	key string,
-	simpleQueueType int, // an enum to represent "durable" or "transient"
+	simpleQueueType SimpleQueueType,
 ) (*amqp.Channel, amqp.Queue, error) {
 	channel, err := conn.Channel()
 	if err != nil {
@@ -64,4 +66,44 @@ func DeclareAndBind(
 	}
 
 	return channel, queue, nil
+}
+
+func SubscribeJSON[T any](
+	conn *amqp.Connection,
+	exchange,
+	queueName,
+	key string,
+	simpleQueueType SimpleQueueType,
+	handler func(T),
+) error {
+	channel, queue, err := DeclareAndBind(
+		conn,
+		exchange,
+		queueName,
+		key,
+		simpleQueueType,
+	)
+	if err != nil {
+		return err
+	}
+
+	delivery, err := channel.Consume(queue.Name, "", false, false, false, false, nil)
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		for message := range delivery {
+			var decodedMessage T
+
+			if err := json.Unmarshal(message.Body, &decodedMessage); err != nil {
+				continue
+			}
+
+			handler(decodedMessage)
+			message.Ack(false)
+		}
+	}()
+
+	return nil
 }

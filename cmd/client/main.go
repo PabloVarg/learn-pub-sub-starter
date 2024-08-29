@@ -51,6 +51,17 @@ func run(logger *slog.Logger) {
 	}
 
 	game := gamelogic.NewGameState(username)
+	if err := pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilDirect,
+		fmt.Sprintf("%s.%s", routing.PauseKey, username),
+		routing.PauseKey,
+		pubsub.TransientQueue,
+		handlerPause(game),
+	); err != nil {
+		logger.Error("error subscribing to queue", "err", err.Error())
+		return
+	}
 	for {
 		gamelogic.PrintClientHelp()
 		words := gamelogic.GetInput()
@@ -79,5 +90,12 @@ func run(logger *slog.Logger) {
 			return
 		default:
 		}
+	}
+}
+
+func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
+	return func(ps routing.PlayingState) {
+		gs.HandlePause(ps)
+		fmt.Printf("> ")
 	}
 }
