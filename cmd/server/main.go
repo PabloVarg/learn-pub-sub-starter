@@ -2,36 +2,50 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
 
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/pubsub"
+	"github.com/bootdotdev/learn-pub-sub-starter/internal/routing"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 func main() {
-	fmt.Println("Starting Peril server...")
-
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	logger.Info("Starting Peril server...")
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	signal.NotifyContext(ctx, os.Interrupt)
-
-	run(ctx, logger)
+	run(logger)
 }
 
-func run(ctx context.Context, logger *slog.Logger) {
+func run(logger *slog.Logger) {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
 	if err != nil {
 		logger.Error("run", "err", err.Error())
 		return
 	}
 	defer conn.Close()
-
 	logger.Info("connected to rabbitmq", "conn", conn.RemoteAddr().String())
+
+	channel, err := conn.Channel()
+	if err != nil {
+		logger.Error("error creating channel", "err", err.Error())
+		return
+	}
+
+	pubsub.PublishJSON(
+		ctx,
+		channel,
+		routing.ExchangePerilDirect,
+		routing.PauseKey,
+		routing.PlayingState{
+			IsPaused: true,
+		},
+	)
+	logger.Info("sent message")
 
 	select {
 	case <-ctx.Done():
