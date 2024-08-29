@@ -50,7 +50,34 @@ func run(logger *slog.Logger) {
 		return
 	}
 
-	select {
-	case <-ctx.Done():
+	game := gamelogic.NewGameState(username)
+	for {
+		gamelogic.PrintClientHelp()
+		words := gamelogic.GetInput()
+		if len(words) == 0 {
+			continue
+		}
+
+		switch words[0] {
+		case "spawn":
+			game.CommandSpawn(words)
+		case "move":
+			game.CommandMove(words)
+		case "status":
+			game.CommandStatus()
+		case "help":
+			gamelogic.PrintClientHelp()
+		case "spam":
+			fmt.Println("spamming not allowed")
+		case "quit":
+			gamelogic.PrintQuit()
+			cancel()
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 	}
 }

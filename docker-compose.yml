@@ -5,9 +5,9 @@ services:
         - 5672:5672
         - 15672:15672
 
-  server:
-    build:
-        dockerfile: Dockerfile
-    volumes:
-      - .:/app
-    entrypoint: air -c .air.server.toml
+  # server:
+  #   build:
+  #       dockerfile: Dockerfile
+  #   volumes:
+  #     - .:/app
+  #   entrypoint: air -c .air.server.toml
