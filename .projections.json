@@ -1,5 +1,5 @@
 {
     "*": {
-        "start": "docker compose up ; docker compose down"
+        "start": "docker compose up ; docker compose down --remove-orphans"
     }
 }
