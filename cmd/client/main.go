@@ -49,6 +49,17 @@ func run(logger *slog.Logger) {
 		logger.Error("error creating queue", "err", err.Error())
 		return
 	}
+	channel, _, err := pubsub.DeclareAndBind(
+		conn,
+		routing.ExchangePerilTopic,
+		fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, username),
+		fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, username),
+		pubsub.TransientQueue,
+	)
+	if err != nil {
+		logger.Error("error creating queue", "err", err.Error())
+		return
+	}
 
 	game := gamelogic.NewGameState(username)
 	if err := pubsub.SubscribeJSON(
@@ -58,6 +69,17 @@ func run(logger *slog.Logger) {
 		routing.PauseKey,
 		pubsub.TransientQueue,
 		handlerPause(game),
+	); err != nil {
+		logger.Error("error subscribing to queue", "err", err.Error())
+		return
+	}
+	if err := pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilTopic,
+		fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, username),
+		fmt.Sprintf("%s.*", routing.ArmyMovesPrefix),
+		pubsub.TransientQueue,
+		handlerMove(game),
 	); err != nil {
 		logger.Error("error subscribing to queue", "err", err.Error())
 		return
@@ -73,7 +95,19 @@ func run(logger *slog.Logger) {
 		case "spawn":
 			game.CommandSpawn(words)
 		case "move":
-			game.CommandMove(words)
+			move, err := game.CommandMove(words)
+			if err != nil {
+				fmt.Println(err)
+				break
+			}
+
+			pubsub.PublishJSON(
+				ctx,
+				channel,
+				routing.ExchangePerilTopic,
+				fmt.Sprintf("%s.%s", routing.ArmyMovesPrefix, username),
+				move,
+			)
 		case "status":
 			game.CommandStatus()
 		case "help":
@@ -96,6 +130,13 @@ func run(logger *slog.Logger) {
 func handlerPause(gs *gamelogic.GameState) func(routing.PlayingState) {
 	return func(ps routing.PlayingState) {
 		gs.HandlePause(ps)
+		fmt.Printf("> ")
+	}
+}
+
+func handlerMove(gs *gamelogic.GameState) func(gamelogic.ArmyMove) {
+	return func(ps gamelogic.ArmyMove) {
+		gs.HandleMove(ps)
 		fmt.Printf("> ")
 	}
 }
